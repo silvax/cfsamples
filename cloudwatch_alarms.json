@@ -1,0 +1,61 @@
+{
+  "Description": "Sample Template for cloudwatch alarms. This sample creates an alarm on CPU that when triggered sends an email. It can be easly modified for other Alarms and treshholds by updating the properties for MetricName and Dimension ",
+  "Parameters": {
+    "CPUTRESHHOLD": {
+      "Description": "Percentage of CPU that will trigger the Alarm",
+      "Type": "String"
+    },
+    "INSTANCEID": {
+      "Type": "String",
+      "Description": "ID of the instance to be monitored by the Alarm"
+    },
+    "EMAIL": {
+      "Description": "Email address to send the Alarm to",
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "alarmCPUAlarmForInstance": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "ActionsEnabled": "true",
+        "AlarmDescription": "CPUAlarm",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": "2",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Period": "300",
+        "Statistic": "Average",
+        "Threshold": {
+          "Ref": "CPUTRESHHOLD"
+        },
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "INSTANCEID"
+            }
+          }
+        ]
+      }
+    },
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "EMAIL"
+            },
+            "Protocol": "email"
+          }
+        ]
+      }
+    }
+  }
+}
