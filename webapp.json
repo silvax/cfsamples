@@ -1,0 +1,285 @@
+{
+  "Description": "Web service application stack. ELB, ASG and Route53 record",
+  "Parameters": {
+    "AMI": {
+      "Description": "Amazon EC2 AMI ID to be used by the deployment",
+      "Type": "AWS::EC2::Image::Id"
+    },
+    "ROLE": {
+      "Type": "String",
+      "Description": "Web application Service role. This is used to identify the service name for tagging purposes "
+    },
+    "DNSZONE": {
+      "Description": "Amazon Route53 ZONE Name. This is the zone where a DNS record will be created for the web app. The name should end with a period for example bar.",
+      "Type": "String"
+    },
+    "DNSNAME": {
+      "Type": "String",
+      "Description": "DNS Record Name. This is the full record that will be created not only the host name. It should include the full zone name. For example foo.bar.com"
+    },
+    "SSLCERTID": {
+      "Type": "String",
+      "Description": "Full ARN of the SSL Certificate stored in IAM. This is the cert that will be used for SSL decryption for the ELB."
+    },
+    "ServiceSg": {
+      "Type": "List<AWS::EC2::SecurityGroup::Id>",
+      "Description": "ID of the security group for the web service"
+    },
+    "ELBSg": {
+      "Type": "List<AWS::EC2::SecurityGroup::Id>",
+      "Description": "ID of the security group used by the ELB"
+    },
+    "HEALTHCHECK": {
+      "Type": "String",
+      "Description": "URL of the health check for the ELB. for example: http:80/ "
+    },
+    "DESIREDINSTANCES": {
+      "Type": "String",
+      "Description": "the desired amout if instances to maintain in the austoscaling group",
+      "Default": "2"
+    },
+    "MAXINSTANCES": {
+      "Type": "String",
+      "Description": "the max amout if instances to maintain in the austoscaling group",
+      "Default": "8"
+    },
+    "MININSTANCES": {
+      "Type": "String",
+      "Description": "the minimum amout if instances to maintain in the austoscaling group",
+      "Default": "2"
+    },
+    "HIGHCPUTHRESHOLD": {
+      "Type": "String",
+      "Description": "This is the CPU percent that will trigger a scale up event",
+      "Default": "60"
+    },
+    "LOWCPUTHRESHOLD": {
+      "Type": "String",
+      "Description": "This is the CPU percent that will trigger a scale down event",
+      "Default": "25"
+    },
+    "IAMROLE": {
+      "Type": "String",
+      "Description": "The IAM Role name that will be used for the instances. This role must already exist",
+      "Default": "default"
+    },
+    "TYPE": {
+      "Type": "String",
+      "Description": "The ec2 instance type that will be used for the instances.",
+      "Default": "m3.medium"
+    },
+    "ELBSCHEME": {
+      "Type": "String",
+      "Description": "This will determine if the ELB will be public facing or internal only",
+      "Default": "internet-facing",
+      "AllowedValues": [
+        "internet-facing",
+        "internal"
+      ],
+      "Description": "Specify if the ELB will be internet facing or internal"
+    },
+    "KEYPAIR": {
+      "Description": "Amazon EC2 Key Pair",
+      "Type": "AWS::EC2::KeyPair::KeyName"
+    },
+    "USERDATA": {
+      "Type": "String",
+      "Description": "Bash code to execute when the instance starts. End each line with carriege return character"
+    },
+    "ENVIRONMENT": {
+      "Type": "String",
+      "Description": "Environment to deploy to dev or prod"
+    }
+  },
+
+  "Mappings": {
+    "EnvironmentMap": {
+      "dev" : {
+        "vpcsubnet": ["subnet-ad6d9586", "subnet-8d29f7d4", "subnet-5eb40b29"]
+      },
+      "prod" : {
+        "vpcsubnet": ["subnet-dd02feaa", "subnet-04e3db2c", "subnet-26362e60"]
+      }
+    }
+  },
+
+  "Resources": {
+    "DNS": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneName" : { "Ref" : "DNSZONE" },
+        "Name": {
+          "Ref": "DNSNAME"
+        },
+        "Type": "CNAME",
+        "TTL": "300",
+        "ResourceRecords": [
+          {
+            "Fn::GetAtt": [
+              "ELB",
+              "DNSName"
+            ]
+          }
+        ]
+      }
+    },
+    "ELB": {
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties": {
+        "Subnets": {
+          "Fn::FindInMap" : [ "EnvironmentMap", { "Ref" : "ENVIRONMENT" }, "vpcsubnet"]
+        },
+        "SecurityGroups": {
+          "Ref": "ELBSg"
+        },
+        "Scheme": {
+          "Ref": "ELBSCHEME"
+        },
+        "Listeners": [
+          {
+            "LoadBalancerPort": "443",
+            "Protocol": "HTTPS",
+            "InstancePort": "443",
+            "InstanceProtocol": "HTTPS",
+            "SSLCertificateId": {
+              "Ref": "SSLCERTID"
+            }
+          },
+          {
+            "LoadBalancerPort": "80",
+            "Protocol": "HTTP",
+            "InstancePort": "80",
+            "InstanceProtocol": "HTTP"
+          },
+          {
+            "LoadBalancerPort": "9000",
+            "Protocol": "HTTP",
+            "InstancePort": "9000",
+            "InstanceProtocol": "HTTP"
+          }
+        ],
+        "HealthCheck": {
+          "HealthyThreshold": "2",
+          "Interval": "10",
+          "Target": {
+            "Ref": "HEALTHCHECK"
+          },
+          "Timeout": "5",
+          "UnhealthyThreshold": "2"
+        },
+        "ConnectionDrainingPolicy": {
+          "Enabled": "true",
+          "Timeout": "60"
+        },
+        "CrossZone": "true"
+      }
+    },
+    "InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [
+          {
+            "Ref": "IAMROLE"
+          }
+        ]
+      }
+    },
+    "LaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "AssociatePublicIpAddress": true,
+        "ImageId": {
+          "Ref": "AMI"
+        },
+        "IamInstanceProfile": {
+          "Ref": "InstanceProfile"
+        },
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+           "#!/bin/bash -xe\n",
+           "exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\n",
+           "yum install httpd -y\n",
+            { "Ref" : "USERDATA" },
+            "\n",
+            "until [ \"$state\" == \"\\\"InService\\\"\" ]; do \n",
+            "  state=$(aws --region ", { "Ref" : "AWS::Region" }, " elb describe-instance-health ",
+            "              --load-balancer-name ", { "Ref" : "ELB" },
+            "              --instances $(curl -s http://169.254.169.254/latest/meta-data/instance-id) ",
+            "              --query InstanceStates[0].State); ",
+            "  sleep 10; \n",
+            "done\n",
+             "/usr/local/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource ASG ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}},
+        "SecurityGroups": {
+          "Ref": "ServiceSg"
+        },
+        "KeyName": {
+          "Ref": "KEYPAIR"
+        },
+        "InstanceType": {
+          "Ref": "TYPE"
+        }
+      }
+    },
+    "ASG": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT10M",
+          "Count"   : "2"
+        }
+      },
+      "UpdatePolicy" : {
+        "AutoScalingRollingUpdate" : {
+        "MaxBatchSize" : "1",
+        "MinInstancesInService" : "1",
+        "PauseTime" : "PT10M",
+        "WaitOnResourceSignals": "true"
+        }
+      },
+      "Properties": {
+        "VPCZoneIdentifier": { "Fn::FindInMap" : [ "EnvironmentMap", { "Ref" : "ENVIRONMENT" }, "vpcsubnet"]},
+        "LaunchConfigurationName": {
+          "Ref": "LaunchConfig"
+        },
+        "MinSize": {
+          "Ref": "MININSTANCES"
+        },
+        "DesiredCapacity": {
+          "Ref": "DESIREDINSTANCES"
+        },
+        "MaxSize": {
+          "Ref": "MAXINSTANCES"
+        },
+        "Cooldown": "600",
+        "LoadBalancerNames": [
+          {
+            "Ref": "ELB"
+          }
+        ],
+        "TerminationPolicies": [
+          "OldestInstance"
+        ],
+        "Tags": [
+          {
+            "Key": "role",
+            "Value": {
+              "Ref": "ROLE"
+            },
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Ref": "ROLE"
+            },
+            "PropagateAtLaunch": true
+          }
+        ]
+      }
+    }
+  }
+}
