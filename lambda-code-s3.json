@@ -1,0 +1,78 @@
+{
+  "Description": "This is a Lambda sample template",
+  "Parameters": {
+    "S3BUCKET": {
+      "Description": "Name of the s3 bucket where the code lives",
+      "Type": "String",
+      "Default": "andress-web"
+    },
+    "S3KEY": {
+      "Type": "String",
+      "Description": "S3 key where the code lives. If is at the root of the bucket then is just the zip file name. If is nested inside a key then it should be something like folder/code.zip",
+      "Default": "hello.zip"
+    },
+    "FUNCTIONNAME": {
+      "Description": "A name for the function. If you don't specify a name, AWS CloudFormation generates a unique physical ID and uses that ID for the function's name.If you specify a name, you cannot perform updates that require replacement of this resource. You can perform updates that require no or some interruption. If you must replace the resource, specify a new name",
+      "Type": "String",
+      "Default": "MyTestFunction"
+    },
+    "FUNCTIONDESCRIPTION": {
+      "Description": "A description string for you function ",
+      "Type": "String",
+      "Default":" This is just a test function"
+    },
+    "HANDLER": {
+      "Description": "The name of the function (within your source code) that Lambda calls to start running your code.",
+      "Type": "String",
+      "Default":"hello.handler"
+    },
+    "MEMORY": {
+      "Description": "The amount of memory, in MB, that is allocated to your Lambda function. Lambda uses this value to proportionally allocate the amount of CPU power.Your function use case determines your CPU and memory requirements. For example, a database operation might need less memory than an image processing function. You must specify a value that is greater than or equal to 128, and it must be a multiple of 64. You cannot specify a size larger than 1536. The default value is 128 MB . Minimum = 128 MB / Maximum = 1536 MB (with 64 MB increments)",
+      "Type": "Number",
+      "Default": "128"
+    },
+    "ROLE": {
+      "Description": "The Amazon Resource Name (ARN) of the AWS Identity and Access Management (IAM) execution role that Lambda assumes when it runs your code to access AWS services.",
+      "Type": "String"
+    },
+    "RUNTIME": {
+      "Description": "The runtime environment for the Lambda function that you are uploading.Valid Values: nodejs | nodejs4.3 | nodejs6.10 | java8 | python2.7 | python3.6 | dotnetcore1.0 | nodejs4.3-edge ",
+      "Type": "String",
+      "Default": "python2.7"
+    },
+    "TIMEOUT": {
+      "Description": "The function execution time at which Lambda should terminate the function. Because the execution time has cost implications, we recommend you set this value based on your expected execution time. The default is 3 seconds ",
+      "Type": "Number",
+      "Default": "10"
+    },
+    "NAMETAG": {
+      "Description": "A value for the Name tag on the function",
+      "Type": "String",
+      "Default": "TestFunction"
+    }
+  },
+  "Resources": {
+"InlinePythonLambdaFunction": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+     "Code": {
+          "S3Bucket": {"Ref":"S3BUCKET"},
+          "S3Key": {"Ref":"S3KEY"}
+      },
+       "Description": {"Ref":"FUNCTIONDESCRIPTION"},
+       "FunctionName": {"Ref":"FUNCTIONNAME"},
+       "Handler": {"Ref":"HANDLER"},
+       "MemorySize": {"Ref":"MEMORY"},
+       "Role": {"Ref":"ROLE"},
+       "Runtime": {"Ref":"RUNTIME"},
+       "Timeout": {"Ref":"TIMEOUT"},
+       "Tags": [
+         {
+           "Key": "Name",
+           "Value": {"Ref":"NAMETAG"}
+         }
+       ]
+   }
+}
+}
+}
